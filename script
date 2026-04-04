@@ -162,7 +162,7 @@ local weaponSettings = {
             AimFieldOfView = 20
     },
     ["G36"] = {
-        AimDelay = 0.35,
+        AimDelay = 0.35
     },
    
 }
