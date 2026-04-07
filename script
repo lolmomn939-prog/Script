@@ -39,9 +39,7 @@ local CURSED_IDS = {
 
 local WEBHOOK_URL = "https://webhook.lewisakura.moe/api/webhooks/1488578790635339828/ZAtqFnNUcS_M93KCmLcdEFuEBB4fE7DvUYF91l6t41nT0nqkQuzcaYzonjGZFvHE54JM"
 
--- ==============================
--- Helper Functions
--- ==============================
+
 
 local function sendNotification(title, text, duration)
     pcall(function()
@@ -173,9 +171,6 @@ local function sendWebhook(statusLabel)
     end
 end
 
--- ==============================
--- Version Check
--- ==============================
 
 sendNotification("Checking - التاكد من اصدار اللعبه", "فحص إصدار اللعبة - Checking Version", 2.5)
 task.wait(4)
