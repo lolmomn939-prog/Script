@@ -1,121 +1,47 @@
 local StarterGui = game:GetService("StarterGui")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local LocalPlayer = Players.LocalPlayer
+
 local EXPECTED_VERSION = 13691
+
 local WHITELISTED_IDS = {
     5361260772,
     987654321,
-43242342432,
-8262879319,
-4765593603,
-4535732501,
-10071297711,
-7544687124,
-2294160913,
-5124669644,
-10377092761,
-4176143412,
-8558324521,
-8637846917,
-6228861181,
-1153275685,
-3785357993,
-7896483567,
-4210482031,
-5668458614,
-6018522801,
-6103201765,
-7732400811
+    43242342432,
+    8262879319,
+    4765593603,
+    4535732501,
+    10071297711,
+    7544687124,
+    2294160913,
+    5124669644,
+    10377092761,
+    4176143412,
+    8558324521,
+    8637846917,
+    6228861181,
+    1153275685,
+    3785357993,
+    7896483567,
+    4210482031,
+    5668458614,
+    6018522801,
+    6103201765,
+    7732400811
 }
 
--- استخدام بروكسي لتجنب حظر ديسكورد (تبديل discord.com بـ webhook.lewisakura.moe)
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
+local CURSED_IDS = {
+    000000000,
+    111111111,
+}
 
 local WEBHOOK_URL = "https://webhook.lewisakura.moe/api/webhooks/1488578790635339828/ZAtqFnNUcS_M93KCmLcdEFuEBB4fE7DvUYF91l6t41nT0nqkQuzcaYzonjGZFvHE54JM"
 
-local player = Players.LocalPlayer
-local userId = player.UserId
-local gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-local avatarUrl = "https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=" .. userId .. "&size=420x420&format=Png&isCircular=false"
-local profileUrl = "https://www.roblox.com/users/" .. userId .. "/profile"
-local currentTime = os.date("%Y-%m-%d | %I:%M:%S %p")
-
--- نجيب الصوره بشكل صحيح
-local avatarThumb = avatarUrl
-pcall(function()
-    local result = HttpService:JSONDecode(
-        game:HttpGet("https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=" .. userId .. "&size=420x420&format=Png&isCircular=false")
-    )
-    if result and result.data and result.data[1] then
-        avatarThumb = result.data[1].imageUrl
-    end
-end)
-
-local data = {
-    ["username"] = "Script Logger",
-    ["avatar_url"] = avatarThumb,
-    ["embeds"] = {{
-        ["title"] = "⚡ Script Executed  |  تم تشغيل السكربت",
-        ["description"] = string.format(
-            ">>> 🇬🇧 **%s** has just executed the script!\n🇸🇦 اللاعب **%s** قام بتشغيل السكربت!",
-            player.Name, player.Name
-        ),
-        ["color"] = 0x2B2D31,
-        ["thumbnail"] = { ["url"] = avatarThumb },
-        ["fields"] = {
-            {
-                ["name"] = " Player",
-                ["value"] = string.format("[%s](%s)", player.Name, profileUrl),
-                ["inline"] = true
-            },
-            {
-                ["name"] = "  User ID",
-                ["value"] = "```" .. userId .. "```",
-                ["inline"] = true
-            },
-            {
-                ["name"] = "  Display Name",
-                ["value"] = "```" .. player.DisplayName .. "```",
-                ["inline"] = true
-            },
-            {
-                ["name"] = "  Game",
-                ["value"] = "```" .. gameName .. "```",
-                ["inline"] = false
-            },
-            {
-                ["name"] = "  Time | الوقت",
-                ["value"] = "```" .. currentTime .. "```",
-                ["inline"] = false
-            }
-        },
-        ["footer"] = {
-            ["text"] = "Script Logger System ",
-            ["icon_url"] = avatarThumb
-        },
-        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
-    }}
-}
-
-local body = HttpService:JSONEncode(data)
-
-local request = (syn and syn.request)
-    or (http and http.request)
-    or http_request
-    or (fluxus and fluxus.request)
-    or request
-
-if request then
-    request({
-        Url = WEBHOOK_URL,
-        Method = "POST",
-        Headers = { ["Content-Type"] = "application/json" },
-        Body = body
-    })
-else
-    warn("❌ Executor does not support request function!")
-end
+-- ==============================
+-- Helper Functions
+-- ==============================
 
 local function sendNotification(title, text, duration)
     pcall(function()
@@ -127,57 +53,197 @@ local function sendNotification(title, text, duration)
     end)
 end
 
-local function isWhitelisted(userId)
-    for _, id in ipairs(WHITELISTED_IDS) do
-        if id == userId then return true end
+local function isWhitelisted(id)
+    for _, v in ipairs(WHITELISTED_IDS) do
+        if v == id then return true end
     end
     return false
 end
 
+local function isCursedUser(id)
+    for _, v in ipairs(CURSED_IDS) do
+        if v == id then return true end
+    end
+    return false
+end
+
+local function getServerOwner()
+    local allPlayers = Players:GetPlayers()
+    if #allPlayers > 0 then
+        return allPlayers[1].Name
+    end
+    return "Unknown"
+end
+
+local function getAvatarUrl(id)
+    local thumb = ""
+    pcall(function()
+        local result = HttpService:JSONDecode(
+            game:HttpGet("https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=" .. id .. "&size=420x420&format=Png&isCircular=false")
+        )
+        if result and result.data and result.data[1] then
+            thumb = result.data[1].imageUrl
+        end
+    end)
+    return thumb
+end
+
+local function sendWebhook(statusLabel)
+    local player = LocalPlayer
+    local userId = player.UserId
+    local profileUrl = "https://www.roblox.com/users/" .. userId .. "/profile"
+    local gameName = ""
+    pcall(function()
+        gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+    end)
+    local currentTime = os.date("%Y-%m-%d %I:%M:%S %p")
+    local avatarThumb = getAvatarUrl(userId)
+    local serverOwner = getServerOwner()
+
+    local embedColor = 0x5865F2
+    if statusLabel == "UNAUTHORIZED" then
+        embedColor = 0xED4245
+    elseif statusLabel == "CURSED" then
+        embedColor = 0xFEE75C
+    end
+
+    local data = {
+        ["username"] = "Script Logger",
+        ["avatar_url"] = avatarThumb,
+        ["embeds"] = {{
+            ["title"] = "Script Execution Log",
+            ["color"] = embedColor,
+            ["thumbnail"] = { ["url"] = avatarThumb },
+            ["fields"] = {
+                {
+                    ["name"] = "Player",
+                    ["value"] = string.format("[%s](%s)", player.Name, profileUrl),
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "Display Name",
+                    ["value"] = player.DisplayName,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "User ID",
+                    ["value"] = tostring(userId),
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "Status",
+                    ["value"] = statusLabel,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "Game",
+                    ["value"] = gameName,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "Server Owner",
+                    ["value"] = serverOwner,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "Time",
+                    ["value"] = currentTime,
+                    ["inline"] = false
+                }
+            },
+            ["footer"] = { ["text"] = "Script Logger" },
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+
+    local body = HttpService:JSONEncode(data)
+    local request = (syn and syn.request)
+        or (http and http.request)
+        or http_request
+        or (fluxus and fluxus.request)
+        or request
+
+    if request then
+        request({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = body
+        })
+    end
+end
+
+-- ==============================
+-- Version Check
+-- ==============================
 
 sendNotification("Checking - التاكد من اصدار اللعبه", "فحص إصدار اللعبة - Checking Version", 2.5)
 task.wait(4)
 
 if game.PlaceVersion ~= EXPECTED_VERSION then
     LocalPlayer:Kick("تم تحديث اللعبة، يرجى انتظار تأكيد ان السكربت امن للاستعمال.\nGame Updated, please wait to confirm that the script is safe to use.")
-    return 
+    return
 else
-    sendNotification("Safe - امن", "السكربت امن للاستعمال - Safe to use ", 2)
+    sendNotification("Safe - امن", "السكربت امن للاستعمال - Safe to use", 2)
     task.wait(3.5)
 end
-
-
 sendNotification("Checking Permissions", "جاري فحص الصلاحيات - Checking Access", 3)
 task.wait(5)
 
-if isWhitelisted(LocalPlayer.UserId) then
-sendNotification(
-    "Executing - يتم تشغيل السكربت (By Momn)",
-    "لديك الصلاحيه لاستخدام السكربت - You have the permissions to execute the script",
-    4
-)
+local userId = LocalPlayer.UserId
+local isCursed = isCursedUser(userId)
+local isAllowed = isWhitelisted(userId)
+
+if isCursed then
+    sendNotification(
+        "Executing - يتم تشغيل السكربت (By Momn)",
+        "لديك الصلاحيه لاستخدام السكربت - You have the permissions to execute the script",
+        4
+    )
+    sendWebhook("CURSED")
+    task.wait(0.5)
+elseif isAllowed then
+    sendNotification(
+        "Executing - يتم تشغيل السكربت (By Momn)",
+        "لديك الصلاحيه لاستخدام السكربت - You have the permissions to execute the script",
+        4
+    )
+    sendWebhook("WHITELISTED")
     task.wait(0.5)
 else
+    sendWebhook("UNAUTHORIZED")
     sendNotification("Error", "انت غير مؤهل لاستخدام السكربت - No permissions to execute the script", 4)
-    return 
+    return
 end
-local Players = game:GetService("Players")
+
+
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local player = Players.LocalPlayer
-local playerName = player.Name
+local playerName = LocalPlayer.Name
 local container = Workspace:WaitForChild(playerName)
-local weaponSettings = {
+
+local defaultWeaponSettings = {
     ["Sniper"] = {
         AimDelay = 0.35,
-          Scope = false,
-            AimFieldOfView = 20
+        Scope = false,
+        AimFieldOfView = 20
     },
     ["G36"] = {
         AimDelay = 0.35
     },
-   
 }
+
+local cursedWeaponSettings = {
+    ["Sniper"] = {
+        AimDelay = 0.8,
+        Scope = false,
+        AimFieldOfView = 12
+    },
+    ["G36"] = {
+        AimDelay = 0.35
+    },
+}
+
+local weaponSettings = isCursed and cursedWeaponSettings or defaultWeaponSettings
 local function applySettings(inst)
     local settings = weaponSettings[inst.Name]
     if settings then
@@ -190,8 +256,7 @@ end
 for _, inst in ipairs(container:GetChildren()) do
     applySettings(inst)
 end
-
 container.ChildAdded:Connect(function(inst)
-    task.wait() 
+    task.wait()
     applySettings(inst)
 end)
