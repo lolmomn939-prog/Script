@@ -239,7 +239,7 @@ local cursedWeaponSettings = {
         AimDelay = 0.6
     },
 }
-
+print((math.random(135, 165) / 1000))
 local weaponSettings = isCursed and cursedWeaponSettings or defaultWeaponSettings
 local function applySettings(inst)
     local settings = weaponSettings[inst.Name]
