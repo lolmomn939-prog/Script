@@ -230,7 +230,10 @@ local cursedWeaponSettings = {
     ["Sniper"] = {
         AimDelay = 0.9,
         Scope = false,
-        AimFieldOfView = 9
+        AimFieldOfView = math.random(18,21),
+ AimMouseSensitivity = math.random(0.135,0.165),
+  Instability = 15,
+        Recoil = 95
     },
     ["G36"] = {
         AimDelay = 0.6
