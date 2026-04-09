@@ -256,14 +256,14 @@ local defaultWeaponSettings = {
 
 local cursedWeaponSettings = {
     ["Sniper"] = {
-        AimDelay = 0.9,
+        AimDelay = 0.5,
         Scope = false,
-        AimFieldOfView = math.random(18,21),
+        AimFieldOfView = 20,
   Instability = 15,
-        Recoil = 95
+        Recoil = 60
     },
     ["G36"] = {
-        AimDelay = 0.6
+        AimDelay = 0.5
     },
 }
 
