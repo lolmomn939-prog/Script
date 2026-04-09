@@ -4,7 +4,30 @@ local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local LocalPlayer = Players.LocalPlayer
 
+local fileName = "ExecutionCount.txt"
+local currentCount = 0
+
+local success, content = pcall(function()
+    return readfile(fileName)
+end)
+
+if success and content then
+    currentCount = tonumber(content) or 0
+end
+
+currentCount = currentCount + 1
+writefile(fileName, tostring(currentCount))
+
+
+
 local EXPECTED_VERSION = 13691
+
+local fileName = "ExecutionCount.txt"
+local Count = 0 
+
+if isfile(fileName) then
+    Count = tonumber(readfile(fileName)) or 0 
+end
 
 local WHITELISTED_IDS = {
     987654321,
@@ -144,6 +167,11 @@ local function sendWebhook(statusLabel)
                 {
                     ["name"] = "Time",
                     ["value"] = currentTime,
+                    ["inline"] = false
+                },
+ {
+                    ["name"] = "Times Executed",
+                    ["value"] = Count,
                     ["inline"] = false
                 }
             },
