@@ -7,7 +7,6 @@ local LocalPlayer = Players.LocalPlayer
 local EXPECTED_VERSION = 13691
 
 local WHITELISTED_IDS = {
-    5361260772,
     987654321,
     43242342432,
     8262879319,
@@ -33,7 +32,7 @@ local WHITELISTED_IDS = {
 }
 
 local CURSED_IDS = {
-    000000000,
+    5361260772,
     111111111,
 }
 
@@ -229,12 +228,12 @@ local defaultWeaponSettings = {
 
 local cursedWeaponSettings = {
     ["Sniper"] = {
-        AimDelay = 0.8,
+        AimDelay = 0.9,
         Scope = false,
-        AimFieldOfView = 12
+        AimFieldOfView = 9
     },
     ["G36"] = {
-        AimDelay = 0.35
+        AimDelay = 0.6
     },
 }
 
