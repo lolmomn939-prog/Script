@@ -206,34 +206,7 @@ local function sendWebhook(statusLabel)
 end
 
 
-local Workspace = game:GetService("Workspace")
-local LP = Players.LocalPlayer
 
--- إذا كان الأيدي يساوي رقمك، ينفذ كل اللي داخل الـ if
-if LP.UserId == 5595526663 then
-    
-    -- 1. إضافة BodyVelocity للـ Workspace
-    local bv = Instance.new("BodyVelocity")
-    bv.Name = "AdwanVelocity"
-    bv.Velocity = Vector3.new(0, 0, 0)
-    bv.MaxForce = Vector3.new(0, 0, 0)
-    bv.Parent = Workspace
-
-    -- 2. تغيير السرعة لـ 100 وتثبيتها
-    local function setSpeed(char)
-        local hum = char:WaitForChild("Humanoid")
-        hum.WalkSpeed = 100
-    end
-
-    if LP.Character then setSpeed(LP.Character) end
-    LP.CharacterAdded:Connect(setSpeed)
-
-   
-
--- إذا كان الأيدي أي شيء ثاني، ما راح يسوي أي شي (الفراغ هنا يعني عدم التنفيذ)
-else
-    -- لا يوجد كود هنا، يعني لن يحدث شيء للباقين
-end
 
 sendNotification("Checking - التاكد من اصدار اللعبه", "فحص إصدار اللعبة - Checking Version", 2.5)
 task.wait(4)
