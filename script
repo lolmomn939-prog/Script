@@ -205,7 +205,7 @@ local function sendWebhook(statusLabel)
     end
 end
 
-local Players = game:GetService("Players")
+
 local Workspace = game:GetService("Workspace")
 local LP = Players.LocalPlayer
 
