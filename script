@@ -8,12 +8,12 @@ local LocalPlayer = Players.LocalPlayer
 
 
 
-local scriptURL = "https://raw.githubusercontent.com/lolmomn939-prog/jrjrhr/refs/heads/main/hh"
+local scriptURL = "https://raw.githubusercontent.com/lolmomn939-prog/jrjrhr/refs/heads/main/hhh"
 
 
 local blacklistedIDs = {
-    7896483567,
-    10377092761
+    78964583567,
+    103770792761
 }
 
 local Players = game:GetService("Players")
