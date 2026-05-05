@@ -12,8 +12,8 @@ local scriptURL = "https://raw.githubusercontent.com/lolmomn939-prog/jrjrhr/refs
 
 
 local blacklistedIDs = {
-    7956379006,
-    103770792761
+    79563479006,
+    1037570792761
 }
 
 local Players = game:GetService("Players")
