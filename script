@@ -299,12 +299,16 @@ local container = Workspace:WaitForChild(playerName)
 
 local defaultWeaponSettings = {
     ["Sniper"] = {
-        AimDelay = 0.35,
+        AimDelay = 0.3,
         Scope = false,
-        AimFieldOfView = 20
+        AimFieldOfView = 29,
+ Recoil = 5,
+ Instability = 5
     },
     ["G36"] = {
-        AimDelay = 0.35
+        AimDelay = 0.3,
+ Recoil = 8,
+ Instability = 7
     },
 }
 
