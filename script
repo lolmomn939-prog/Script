@@ -307,8 +307,8 @@ local defaultWeaponSettings = {
     },
     ["G36"] = {
         AimDelay = 0.3,
- Recoil = 8,
- Instability = 7
+ Recoil = 6,
+ Instability = 5
     },
 }
 
