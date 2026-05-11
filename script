@@ -305,7 +305,6 @@ local userSettings = args[1] or {}
 
 local function getAimDelay(weapon)
     local val = (userSettings[weapon] and userSettings[weapon].AimDelay) or 0.3
-    -- الشرط: إذا كان أقل من 0.3 أو أكثر من 1.5 يرجعه 0.3
     if val < 0.3 or val > 1.5 then
         return 0.3
     end
