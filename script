@@ -296,78 +296,858 @@ else
     return
 end
 
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 
-local Workspace = game:GetService("Workspace")
-local playerName = LocalPlayer.Name
-local container = Workspace:WaitForChild(playerName)
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local args = {...}
-local userSettings = args[1] or {}
+local playerFolder = workspace:WaitForChild(player.Name, 10)
+local container = playerFolder
 
+local SAVE_KEY_PREFIX = "MomnWpnCfg_"
+local FILE_NAME = "ScriptSettings.json"
 
-local function getAimDelay(weapon)
-    local val = (userSettings[weapon] and userSettings[weapon].AimDelay) or 0.3
-    if val < 0.3 or val > 1.5 then
-        return 0.3
-    end
-    return val
+local function saveSettings(settings, shouldSave)
+	local encoded = HttpService:JSONEncode({
+		Sniper           = settings["Sniper"],
+		G36              = settings["G36"],
+		lasttimewassaved = shouldSave
+	})
+	pcall(function()
+		if writefile then writefile(FILE_NAME, encoded) end
+	end)
+	player:SetAttribute(SAVE_KEY_PREFIX .. "data", encoded)
 end
 
-local function getVal(weapon, key, fallback)
-    if userSettings[weapon] and userSettings[weapon][key] then
-        return userSettings[weapon][key]
-    end
-    return fallback
+local function loadSettings()
+	local raw = nil
+	pcall(function()
+		if isfile and isfile(FILE_NAME) and readfile then
+			raw = readfile(FILE_NAME)
+		end
+	end)
+	if not raw or raw == "" then
+		raw = player:GetAttribute(SAVE_KEY_PREFIX .. "data")
+	end
+	if raw and raw ~= "" then
+		local ok, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+		if ok and decoded then return decoded end
+	end
+	return nil
 end
 
-local defaultWeaponSettings = {
-    ["Sniper"] = {
-        AimDelay = getAimDelay("Sniper"),
-        Scope = false,
-        AimFieldOfView = getVal("Sniper", "Zoom", 29),
-        CrosshairSize = getVal("Sniper", "CrossHairSize", 25),
-        AimMouseSensitivity = getVal("Sniper", "AimMouseSensitivity", 0.15),
-        Recoil = 5,
-        Instability = 5
-    },
-    ["G36"] = {
-        AimFieldOfView = getVal("G36", "Zoom", 35),
-        CrosshairSize = getVal("G36", "CrossHairSize", 25),
-        AimDelay = getAimDelay("G36"),
-        AimMouseSensitivity = getVal("G36", "AimMouseSensitivity", 0.35),
-        Recoil = 6,
-        Instability = 5
-    }
+local currentSettings = {
+	["Sniper"] = { Zoom = 29,  CrossHairSize = 25, AimDelay = 0.3,  AimMouseSensitivity = 0.15, Scope = false },
+	["G36"]    = { Zoom = 35,  CrossHairSize = 25, AimDelay = 0.3,  AimMouseSensitivity = 0.35, Scope = false }
 }
 
-
-local cursedWeaponSettings = {
-    ["Sniper"] = {
-        AimDelay = 0.35,
-        Scope = false,
-        AimFieldOfView = 20,
-  Instability = 15,
-        Recoil = 60
-    },
-    ["G36"] = {
-        AimDelay = 0.35
-    },
-}
-
-local weaponSettings = isCursed and cursedWeaponSettings or defaultWeaponSettings
-local function applySettings(inst)
-    local settings = weaponSettings[inst.Name]
-    if settings then
-        for attr, value in pairs(settings) do
-            inst:SetAttribute(attr, value)
-        end
-    end
+local function round(num, decimals)
+	local mult = 10 ^ (decimals or 0)
+	return math.floor(num * mult + 0.5) / mult
 end
 
-for _, inst in ipairs(container:GetChildren()) do
-    applySettings(inst)
+local activeConnections = {}
+
+local function disconnectAll()
+	for _, conn in ipairs(activeConnections) do
+		if conn and conn.Connected then conn:Disconnect() end
+	end
+	activeConnections = {}
 end
-container.ChildAdded:Connect(function(inst)
-    task.wait()
-    applySettings(inst)
+
+local function applyWeaponSettings(settings)
+	disconnectAll()
+	if not container then return end
+
+	local weaponAttrs = {
+		["Sniper"] = {
+			AimDelay            = settings["Sniper"].AimDelay,
+			Scope               = settings["Sniper"].Scope,
+			AimFieldOfView      = settings["Sniper"].Zoom,
+			CrosshairSize       = settings["Sniper"].CrossHairSize,
+			AimMouseSensitivity = settings["Sniper"].AimMouseSensitivity,
+			Recoil              = 0,
+			Instability         = 0
+		},
+		["G36"] = {
+			AimFieldOfView      = settings["G36"].Zoom,
+			CrosshairSize       = settings["G36"].CrossHairSize,
+			AimDelay            = settings["G36"].AimDelay,
+			AimMouseSensitivity = settings["G36"].AimMouseSensitivity,
+			Scope               = settings["G36"].Scope,
+			Recoil              = 5,
+			Instability         = 5
+		}
+	}
+
+	local function applyToInst(inst)
+		local attrs = weaponAttrs[inst.Name]
+		if attrs then
+			for attr, value in pairs(attrs) do
+				inst:SetAttribute(attr, value)
+			end
+		end
+	end
+
+	for _, inst in ipairs(container:GetChildren()) do
+		applyToInst(inst)
+	end
+
+	local conn = container.ChildAdded:Connect(function(inst)
+		task.wait()
+		applyToInst(inst)
+	end)
+	table.insert(activeConnections, conn)
+end
+
+local uiOpen   = false
+local screenGui
+local mainFrame
+
+local function destroyOldUI()
+	local old = playerGui:FindFirstChild("MomnWeaponUI")
+	if old then old:Destroy() end
+end
+
+local function buildUI()
+	destroyOldUI()
+
+	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+	local tempSettings = {
+		["Sniper"] = {
+			Zoom                = currentSettings["Sniper"].Zoom,
+			CrossHairSize       = currentSettings["Sniper"].CrossHairSize,
+			AimDelay            = currentSettings["Sniper"].AimDelay,
+			AimMouseSensitivity = currentSettings["Sniper"].AimMouseSensitivity,
+			Scope               = currentSettings["Sniper"].Scope
+		},
+		["G36"] = {
+			Zoom                = currentSettings["G36"].Zoom,
+			CrossHairSize       = currentSettings["G36"].CrossHairSize,
+			AimDelay            = currentSettings["G36"].AimDelay,
+			AimMouseSensitivity = currentSettings["G36"].AimMouseSensitivity,
+			Scope               = currentSettings["G36"].Scope
+		}
+	}
+
+	screenGui = Instance.new("ScreenGui")
+	screenGui.Name            = "MomnWeaponUI"
+	screenGui.ResetOnSpawn    = false
+	screenGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent          = playerGui
+
+	local overlay = Instance.new("Frame")
+	overlay.Size                   = UDim2.new(1, 0, 1, 0)
+	overlay.Position               = UDim2.new(0, 0, 0, 0)
+	overlay.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+	overlay.BackgroundTransparency = 0.42
+	overlay.BorderSizePixel        = 0
+	overlay.ZIndex                 = 1
+	overlay.Parent                 = screenGui
+
+	mainFrame = Instance.new("Frame")
+	mainFrame.Name             = "MainFrame"
+	mainFrame.AnchorPoint      = Vector2.new(0.5, 0.5)
+	mainFrame.Position         = UDim2.new(0.5, 0, 0.5, 0)
+	mainFrame.Size             = UDim2.new(0, 0, 0, 0)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	mainFrame.BorderSizePixel  = 0
+	mainFrame.ZIndex           = 2
+	mainFrame.Parent           = screenGui
+
+	local mainCorner = Instance.new("UICorner")
+	mainCorner.CornerRadius = UDim.new(0, 8)
+	mainCorner.Parent       = mainFrame
+
+	local mainStroke = Instance.new("UIStroke")
+	mainStroke.Color     = Color3.fromRGB(42, 42, 42)
+	mainStroke.Thickness = 1
+	mainStroke.Parent    = mainFrame
+
+	local targetSize = isMobile and UDim2.new(0.9, 0, 0, 700) or UDim2.new(0, 440, 0, 700)
+	TweenService:Create(mainFrame, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = targetSize}):Play()
+
+	local header = Instance.new("Frame")
+	header.Size             = UDim2.new(1, 0, 0, 54)
+	header.BackgroundColor3 = Color3.fromRGB(13, 13, 13)
+	header.BorderSizePixel  = 0
+	header.ZIndex           = 3
+	header.Parent           = mainFrame
+
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = UDim.new(0, 8)
+	headerCorner.Parent       = header
+
+	local headerFix = Instance.new("Frame")
+	headerFix.Size             = UDim2.new(1, 0, 0.5, 0)
+	headerFix.Position         = UDim2.new(0, 0, 0.5, 0)
+	headerFix.BackgroundColor3 = Color3.fromRGB(13, 13, 13)
+	headerFix.BorderSizePixel  = 0
+	headerFix.ZIndex           = 3
+	headerFix.Parent           = header
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size                   = UDim2.new(1, 0, 1, 0)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text                   = "By Momn"
+	titleLabel.TextColor3             = Color3.fromRGB(225, 225, 225)
+	titleLabel.Font                   = Enum.Font.GothamBold
+	titleLabel.TextSize               = 16
+	titleLabel.TextXAlignment         = Enum.TextXAlignment.Center
+	titleLabel.ZIndex                 = 4
+	titleLabel.Parent                 = header
+
+	local divider = Instance.new("Frame")
+	divider.Size             = UDim2.new(1, 0, 0, 1)
+	divider.Position         = UDim2.new(0, 0, 0, 54)
+	divider.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+	divider.BorderSizePixel  = 0
+	divider.ZIndex           = 3
+	divider.Parent           = mainFrame
+
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Size                 = UDim2.new(1, 0, 1, -118)
+	scrollFrame.Position             = UDim2.new(0, 0, 0, 55)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel      = 0
+	scrollFrame.ScrollBarThickness   = 3
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(50, 50, 50)
+	scrollFrame.ZIndex               = 3
+	scrollFrame.CanvasSize           = UDim2.new(0, 0, 0, 0)
+	scrollFrame.AutomaticCanvasSize  = Enum.AutomaticSize.Y
+	scrollFrame.Parent               = mainFrame
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding   = UDim.new(0, 0)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent    = scrollFrame
+
+	local scrollPad = Instance.new("UIPadding")
+	scrollPad.PaddingLeft   = UDim.new(0, 13)
+	scrollPad.PaddingRight  = UDim.new(0, 13)
+	scrollPad.PaddingTop    = UDim.new(0, 10)
+	scrollPad.PaddingBottom = UDim.new(0, 10)
+	scrollPad.Parent        = scrollFrame
+
+	local function createSectionHeader(parent, text, layoutOrder)
+		local section = Instance.new("Frame")
+		section.Size             = UDim2.new(1, 0, 0, 32)
+		section.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		section.BorderSizePixel  = 0
+		section.LayoutOrder      = layoutOrder
+		section.Parent           = parent
+
+		local secCorner = Instance.new("UICorner")
+		secCorner.CornerRadius = UDim.new(0, 6)
+		secCorner.Parent       = section
+
+		local secStroke = Instance.new("UIStroke")
+		secStroke.Color     = Color3.fromRGB(36, 36, 36)
+		secStroke.Thickness = 1
+		secStroke.Parent    = section
+
+		local accent = Instance.new("Frame")
+		accent.Size             = UDim2.new(0, 3, 0.6, 0)
+		accent.AnchorPoint      = Vector2.new(0, 0.5)
+		accent.Position         = UDim2.new(0, 0, 0.5, 0)
+		accent.BackgroundColor3 = Color3.fromRGB(160, 160, 160)
+		accent.BorderSizePixel  = 0
+		accent.ZIndex           = 5
+		accent.Parent           = section
+
+		local accentCorner = Instance.new("UICorner")
+		accentCorner.CornerRadius = UDim.new(1, 0)
+		accentCorner.Parent       = accent
+
+		local secLabel = Instance.new("TextLabel")
+		secLabel.Size                   = UDim2.new(1, -20, 1, 0)
+		secLabel.Position               = UDim2.new(0, 14, 0, 0)
+		secLabel.BackgroundTransparency = 1
+		secLabel.Text                   = text
+		secLabel.TextColor3             = Color3.fromRGB(185, 185, 185)
+		secLabel.Font                   = Enum.Font.GothamBold
+		secLabel.TextSize               = 13
+		secLabel.TextXAlignment         = Enum.TextXAlignment.Left
+		secLabel.ZIndex                 = 4
+		secLabel.Parent                 = section
+
+		local gap = Instance.new("Frame")
+		gap.Size                   = UDim2.new(1, 0, 0, 5)
+		gap.BackgroundTransparency = 1
+		gap.LayoutOrder            = layoutOrder + 0.05
+		gap.Parent                 = parent
+	end
+
+	local function createSliderRow(parent, labelText, descText, minVal, maxVal, initVal, step, formatFunc, onChange, layoutOrder)
+		local row = Instance.new("Frame")
+		row.Size             = UDim2.new(1, 0, 0, 84)
+		row.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+		row.BorderSizePixel  = 0
+		row.LayoutOrder      = layoutOrder
+		row.Parent           = parent
+
+		local rowCorner = Instance.new("UICorner")
+		rowCorner.CornerRadius = UDim.new(0, 6)
+		rowCorner.Parent       = row
+
+		local rowStroke = Instance.new("UIStroke")
+		rowStroke.Color     = Color3.fromRGB(30, 30, 30)
+		rowStroke.Thickness = 1
+		rowStroke.Parent    = row
+
+		local sep = Instance.new("Frame")
+		sep.Size                   = UDim2.new(1, 0, 0, 5)
+		sep.BackgroundTransparency = 1
+		sep.LayoutOrder            = layoutOrder + 0.1
+		sep.Parent                 = parent
+
+		local label = Instance.new("TextLabel")
+		label.Size                   = UDim2.new(0.62, 0, 0, 20)
+		label.Position               = UDim2.new(0, 12, 0, 9)
+		label.BackgroundTransparency = 1
+		label.Text                   = labelText
+		label.TextColor3             = Color3.fromRGB(210, 210, 210)
+		label.Font                   = Enum.Font.GothamSemibold
+		label.TextSize               = 14
+		label.TextXAlignment         = Enum.TextXAlignment.Left
+		label.ZIndex                 = 4
+		label.Parent                 = row
+
+		local desc = Instance.new("TextLabel")
+		desc.Size                   = UDim2.new(1, -24, 0, 14)
+		desc.Position               = UDim2.new(0, 12, 0, 31)
+		desc.BackgroundTransparency = 1
+		desc.Text                   = descText
+		desc.TextColor3             = Color3.fromRGB(68, 68, 68)
+		desc.Font                   = Enum.Font.Gotham
+		desc.TextSize               = 11
+		desc.TextXAlignment         = Enum.TextXAlignment.Left
+		desc.ZIndex                 = 4
+		desc.Parent                 = row
+
+		local valueBox = Instance.new("TextBox")
+		valueBox.Size             = UDim2.new(0, 64, 0, 24)
+		valueBox.Position         = UDim2.new(1, -76, 0, 8)
+		valueBox.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+		valueBox.BorderSizePixel  = 0
+		valueBox.Text             = formatFunc and formatFunc(initVal) or tostring(initVal)
+		valueBox.TextColor3       = Color3.fromRGB(215, 215, 215)
+		valueBox.Font             = Enum.Font.GothamBold
+		valueBox.TextSize         = 13
+		valueBox.ClearTextOnFocus = true
+		valueBox.ZIndex           = 5
+		valueBox.Parent           = row
+
+		local vbCorner = Instance.new("UICorner")
+		vbCorner.CornerRadius = UDim.new(0, 4)
+		vbCorner.Parent       = valueBox
+
+		local vbStroke = Instance.new("UIStroke")
+		vbStroke.Color     = Color3.fromRGB(44, 44, 44)
+		vbStroke.Thickness = 1
+		vbStroke.Parent    = valueBox
+
+		local track = Instance.new("Frame")
+		track.Size             = UDim2.new(1, -24, 0, 4)
+		track.Position         = UDim2.new(0, 12, 0, 58)
+		track.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		track.BorderSizePixel  = 0
+		track.ZIndex           = 4
+		track.Parent           = row
+
+		local trackCorner = Instance.new("UICorner")
+		trackCorner.CornerRadius = UDim.new(1, 0)
+		trackCorner.Parent       = track
+
+		local fill = Instance.new("Frame")
+		fill.Size             = UDim2.new((initVal - minVal) / (maxVal - minVal), 0, 1, 0)
+		fill.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+		fill.BorderSizePixel  = 0
+		fill.ZIndex           = 5
+		fill.Parent           = track
+
+		local fillCorner = Instance.new("UICorner")
+		fillCorner.CornerRadius = UDim.new(1, 0)
+		fillCorner.Parent       = fill
+
+		local thumb = Instance.new("Frame")
+		thumb.Size             = UDim2.new(0, 14, 0, 14)
+		thumb.AnchorPoint      = Vector2.new(0.5, 0.5)
+		thumb.Position         = UDim2.new((initVal - minVal) / (maxVal - minVal), 0, 0.5, 0)
+		thumb.BackgroundColor3 = Color3.fromRGB(228, 228, 228)
+		thumb.BorderSizePixel  = 0
+		thumb.ZIndex           = 6
+		thumb.Parent           = track
+
+		local thumbCorner = Instance.new("UICorner")
+		thumbCorner.CornerRadius = UDim.new(1, 0)
+		thumbCorner.Parent       = thumb
+
+		local val      = initVal
+		local dragging = false
+
+		local function updateSlider(newVal)
+			newVal = math.clamp(round(newVal / step) * step, minVal, maxVal)
+			newVal = round(newVal, 4)
+			val    = newVal
+			local ratio    = (newVal - minVal) / (maxVal - minVal)
+			fill.Size      = UDim2.new(ratio, 0, 1, 0)
+			thumb.Position = UDim2.new(ratio, 0, 0.5, 0)
+			valueBox.Text  = formatFunc and formatFunc(newVal) or tostring(newVal)
+			onChange(newVal)
+		end
+
+		local function getRatioFromX(inputX)
+			local tp = track.AbsolutePosition.X
+			local ts = track.AbsoluteSize.X
+			return minVal + math.clamp((inputX - tp) / ts, 0, 1) * (maxVal - minVal)
+		end
+
+		thumb.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+			end
+		end)
+
+		track.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				updateSlider(getRatioFromX(input.Position.X))
+			end
+		end)
+
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch) then
+				updateSlider(getRatioFromX(input.Position.X))
+			end
+		end)
+
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end)
+
+		valueBox.FocusLost:Connect(function()
+			local typed = tonumber(valueBox.Text)
+			if typed then
+				updateSlider(typed)
+			else
+				valueBox.Text = formatFunc and formatFunc(val) or tostring(val)
+			end
+		end)
+	end
+
+	local function createToggleRow(parent, labelText, descText, initVal, onChange, layoutOrder)
+		local row = Instance.new("Frame")
+		row.Size             = UDim2.new(1, 0, 0, 62)
+		row.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+		row.BorderSizePixel  = 0
+		row.LayoutOrder      = layoutOrder
+		row.Parent           = parent
+
+		local rowCorner = Instance.new("UICorner")
+		rowCorner.CornerRadius = UDim.new(0, 6)
+		rowCorner.Parent       = row
+
+		local rowStroke = Instance.new("UIStroke")
+		rowStroke.Color     = Color3.fromRGB(30, 30, 30)
+		rowStroke.Thickness = 1
+		rowStroke.Parent    = row
+
+		local sep = Instance.new("Frame")
+		sep.Size                   = UDim2.new(1, 0, 0, 5)
+		sep.BackgroundTransparency = 1
+		sep.LayoutOrder            = layoutOrder + 0.1
+		sep.Parent                 = parent
+
+		local label = Instance.new("TextLabel")
+		label.Size                   = UDim2.new(0.60, 0, 0, 20)
+		label.Position               = UDim2.new(0, 12, 0, 10)
+		label.BackgroundTransparency = 1
+		label.Text                   = labelText
+		label.TextColor3             = Color3.fromRGB(210, 210, 210)
+		label.Font                   = Enum.Font.GothamSemibold
+		label.TextSize               = 14
+		label.TextXAlignment         = Enum.TextXAlignment.Left
+		label.ZIndex                 = 4
+		label.Parent                 = row
+
+		local desc = Instance.new("TextLabel")
+		desc.Size                   = UDim2.new(0.65, 0, 0, 14)
+		desc.Position               = UDim2.new(0, 12, 0, 33)
+		desc.BackgroundTransparency = 1
+		desc.Text                   = descText
+		desc.TextColor3             = Color3.fromRGB(68, 68, 68)
+		desc.Font                   = Enum.Font.Gotham
+		desc.TextSize               = 11
+		desc.TextXAlignment         = Enum.TextXAlignment.Left
+		desc.ZIndex                 = 4
+		desc.Parent                 = row
+
+		local toggleBg = Instance.new("Frame")
+		toggleBg.Size             = UDim2.new(0, 52, 0, 28)
+		toggleBg.AnchorPoint      = Vector2.new(1, 0.5)
+		toggleBg.Position         = UDim2.new(1, -12, 0.5, 0)
+		toggleBg.BackgroundColor3 = initVal and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(35, 35, 35)
+		toggleBg.BorderSizePixel  = 0
+		toggleBg.ZIndex           = 5
+		toggleBg.Parent           = row
+
+		local toggleBgCorner = Instance.new("UICorner")
+		toggleBgCorner.CornerRadius = UDim.new(1, 0)
+		toggleBgCorner.Parent       = toggleBg
+
+		local toggleBgStroke = Instance.new("UIStroke")
+		toggleBgStroke.Color     = Color3.fromRGB(55, 55, 55)
+		toggleBgStroke.Thickness = 1
+		toggleBgStroke.Parent    = toggleBg
+
+		local knob = Instance.new("Frame")
+		knob.Size             = UDim2.new(0, 22, 0, 22)
+		knob.AnchorPoint      = Vector2.new(0.5, 0.5)
+		knob.Position         = initVal and UDim2.new(1, -14, 0.5, 0) or UDim2.new(0, 14, 0.5, 0)
+		knob.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+		knob.BorderSizePixel  = 0
+		knob.ZIndex           = 6
+		knob.Parent           = toggleBg
+
+		local knobCorner = Instance.new("UICorner")
+		knobCorner.CornerRadius = UDim.new(1, 0)
+		knobCorner.Parent       = knob
+
+		local stateLabel = Instance.new("TextLabel")
+		stateLabel.Size                   = UDim2.new(0, 40, 0, 18)
+		stateLabel.AnchorPoint            = Vector2.new(1, 0.5)
+		stateLabel.Position               = UDim2.new(1, -68, 0.5, 0)
+		stateLabel.BackgroundTransparency = 1
+		stateLabel.Text                   = ""
+		stateLabel.TextColor3             = initVal and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(80, 80, 80)
+		stateLabel.Font                   = Enum.Font.GothamBold
+		stateLabel.TextSize               = 12
+		stateLabel.TextXAlignment         = Enum.TextXAlignment.Right
+		stateLabel.ZIndex                 = 4
+		stateLabel.Parent                 = row
+
+		local currentVal = initVal
+
+		local function setToggle(newVal)
+			currentVal = newVal
+			TweenService:Create(toggleBg, TweenInfo.new(0.18), {
+				BackgroundColor3 = newVal and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(35, 35, 35)
+			}):Play()
+			TweenService:Create(knob, TweenInfo.new(0.18), {
+				Position = newVal and UDim2.new(1, -14, 0.5, 0) or UDim2.new(0, 14, 0.5, 0)
+			}):Play()
+			stateLabel.Text       = ""
+			stateLabel.TextColor3 = newVal and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(80, 80, 80)
+			onChange(newVal)
+		end
+
+		local toggleBtn = Instance.new("TextButton")
+		toggleBtn.Size                   = UDim2.new(1, 0, 1, 0)
+		toggleBtn.BackgroundTransparency = 1
+		toggleBtn.Text                   = ""
+		toggleBtn.ZIndex                 = 7
+		toggleBtn.Parent                 = row
+
+		toggleBtn.MouseButton1Click:Connect(function()
+			setToggle(not currentVal)
+		end)
+	end
+
+	createSectionHeader(scrollFrame, "Sniper Settings  -  اعدادات السنايبر", 1)
+
+	createSliderRow(scrollFrame, "Zoom", "كل ما زاد، كان الزووم أبعد عن الشاشة",
+		1, 120, tempSettings["Sniper"].Zoom, 1,
+		function(v) return tostring(math.floor(v)) end,
+		function(v) tempSettings["Sniper"].Zoom = math.floor(v) end, 2)
+
+	createSliderRow(scrollFrame, "CrossHair Size", "كل ما قل، كانت نقطة الايم أقرب",
+		0, 60, tempSettings["Sniper"].CrossHairSize, 1,
+		function(v) return tostring(math.floor(v)) end,
+		function(v) tempSettings["Sniper"].CrossHairSize = math.floor(v) end, 4)
+
+	createSliderRow(scrollFrame, "Aim Delay", "كل ما كان أكثر، كان الأمان أعلى",
+		0.2, 0.8, tempSettings["Sniper"].AimDelay, 0.1,
+		function(v) return tostring(round(v, 1)) end,
+		function(v) tempSettings["Sniper"].AimDelay = round(v, 1) end, 6)
+
+	createSliderRow(scrollFrame, "Aim Sensitivity", "كل ما زادت، كان التحريك أسرع",
+		0.01, 1.0, tempSettings["Sniper"].AimMouseSensitivity, 0.01,
+		function(v) return tostring(round(v, 2)) end,
+		function(v) tempSettings["Sniper"].AimMouseSensitivity = round(v, 2) end, 8)
+
+	createToggleRow(scrollFrame, "Scope", "استعمال السكوب في السلاح",
+		tempSettings["Sniper"].Scope,
+		function(v) tempSettings["Sniper"].Scope = v end, 10)
+
+	local gapBetween = Instance.new("Frame")
+	gapBetween.Size                   = UDim2.new(1, 0, 0, 8)
+	gapBetween.BackgroundTransparency = 1
+	gapBetween.LayoutOrder            = 19
+	gapBetween.Parent                 = scrollFrame
+
+	createSectionHeader(scrollFrame, "G36 Settings  -  اعدادات الرشاش", 20)
+
+	createSliderRow(scrollFrame, "Zoom", "كل ما زاد، كان الزووم أبعد عن الشاشة",
+		1, 120, tempSettings["G36"].Zoom, 1,
+		function(v) return tostring(math.floor(v)) end,
+		function(v) tempSettings["G36"].Zoom = math.floor(v) end, 21)
+
+	createSliderRow(scrollFrame, "CrossHair Size", "كل ما قل، كانت نقطة الايم أقرب",
+		0, 60, tempSettings["G36"].CrossHairSize, 1,
+		function(v) return tostring(math.floor(v)) end,
+		function(v) tempSettings["G36"].CrossHairSize = math.floor(v) end, 23)
+
+	createSliderRow(scrollFrame, "Aim Delay", "كل ما كان أكثر، كان الأمان أعلى",
+		0.2, 0.8, tempSettings["G36"].AimDelay, 0.1,
+		function(v) return tostring(round(v, 1)) end,
+		function(v) tempSettings["G36"].AimDelay = round(v, 1) end, 25)
+
+	createSliderRow(scrollFrame, "Aim Sensitivity", "كل ما زادت، كان التحريك أسرع",
+		0.01, 1.0, tempSettings["G36"].AimMouseSensitivity, 0.01,
+		function(v) return tostring(round(v, 2)) end,
+		function(v) tempSettings["G36"].AimMouseSensitivity = round(v, 2) end, 27)
+
+	createToggleRow(scrollFrame, "Scope", "استعمال السكوب في السلاح",
+		tempSettings["G36"].Scope,
+		function(v) tempSettings["G36"].Scope = v end, 29)
+
+	local footerFrame = Instance.new("Frame")
+	footerFrame.Size             = UDim2.new(1, 0, 0, 60)
+	footerFrame.Position         = UDim2.new(0, 0, 1, -60)
+	footerFrame.BackgroundColor3 = Color3.fromRGB(11, 11, 11)
+	footerFrame.BorderSizePixel  = 0
+	footerFrame.ZIndex           = 3
+	footerFrame.Parent           = mainFrame
+
+	local footerCorner = Instance.new("UICorner")
+	footerCorner.CornerRadius = UDim.new(0, 8)
+	footerCorner.Parent       = footerFrame
+
+	local footerFix = Instance.new("Frame")
+	footerFix.Size             = UDim2.new(1, 0, 0.5, 0)
+	footerFix.Position         = UDim2.new(0, 0, 0, 0)
+	footerFix.BackgroundColor3 = Color3.fromRGB(11, 11, 11)
+	footerFix.BorderSizePixel  = 0
+	footerFix.ZIndex           = 3
+	footerFix.Parent           = footerFrame
+
+	local footerDivider = Instance.new("Frame")
+	footerDivider.Size             = UDim2.new(1, 0, 0, 1)
+	footerDivider.Position         = UDim2.new(0, 0, 0, 0)
+	footerDivider.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
+	footerDivider.BorderSizePixel  = 0
+	footerDivider.ZIndex           = 4
+	footerDivider.Parent           = footerFrame
+
+	local confirmBtn = Instance.new("TextButton")
+	confirmBtn.Size             = UDim2.new(0.84, 0, 0, 38)
+	confirmBtn.AnchorPoint      = Vector2.new(0.5, 0.5)
+	confirmBtn.Position         = UDim2.new(0.5, 0, 0.5, 0)
+	confirmBtn.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+	confirmBtn.BorderSizePixel  = 0
+	confirmBtn.Text             = "تاكيد"
+	confirmBtn.TextColor3       = Color3.fromRGB(10, 10, 10)
+	confirmBtn.Font             = Enum.Font.GothamBold
+	confirmBtn.TextSize         = 15
+	confirmBtn.ZIndex           = 5
+	confirmBtn.Parent           = footerFrame
+
+	local confirmCorner = Instance.new("UICorner")
+	confirmCorner.CornerRadius = UDim.new(0, 6)
+	confirmCorner.Parent       = confirmBtn
+
+	confirmBtn.MouseEnter:Connect(function()
+		TweenService:Create(confirmBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(235, 235, 235)}):Play()
+	end)
+	confirmBtn.MouseLeave:Connect(function()
+		TweenService:Create(confirmBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(192, 192, 192)}):Play()
+	end)
+
+	local function showSavePopup(onChoice)
+		local popupBg = Instance.new("Frame")
+		popupBg.Size                   = UDim2.new(1, 0, 1, 0)
+		popupBg.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+		popupBg.BackgroundTransparency = 0.36
+		popupBg.ZIndex                 = 10
+		popupBg.Parent                 = screenGui
+
+		local popup = Instance.new("Frame")
+		popup.Size             = UDim2.new(0, 316, 0, 134)
+		popup.AnchorPoint      = Vector2.new(0.5, 0.5)
+		popup.Position         = UDim2.new(0.5, 0, 0.5, 0)
+		popup.BackgroundColor3 = Color3.fromRGB(13, 13, 13)
+		popup.BorderSizePixel  = 0
+		popup.ZIndex           = 11
+		popup.Parent           = screenGui
+
+		local popupCorner = Instance.new("UICorner")
+		popupCorner.CornerRadius = UDim.new(0, 8)
+		popupCorner.Parent       = popup
+
+		local popupStroke = Instance.new("UIStroke")
+		popupStroke.Color     = Color3.fromRGB(44, 44, 44)
+		popupStroke.Thickness = 1
+		popupStroke.Parent    = popup
+
+		local popupTitle = Instance.new("TextLabel")
+		popupTitle.Size                   = UDim2.new(1, -20, 0, 50)
+		popupTitle.Position               = UDim2.new(0, 0, 0, 16)
+		popupTitle.BackgroundTransparency = 1
+		popupTitle.Text                   = "هل تريد حفظ الاعدادات الحالية للمرة القادمة؟"
+		popupTitle.TextColor3             = Color3.fromRGB(215, 215, 215)
+		popupTitle.Font                   = Enum.Font.GothamSemibold
+		popupTitle.TextSize               = 15
+		popupTitle.TextWrapped            = true
+		popupTitle.TextXAlignment         = Enum.TextXAlignment.Center
+		popupTitle.ZIndex                 = 12
+		popupTitle.Parent                 = popup
+
+		local yesBtn = Instance.new("TextButton")
+		yesBtn.Size             = UDim2.new(0.44, 0, 0, 42)
+		yesBtn.Position         = UDim2.new(0.04, 0, 0, 82)
+		yesBtn.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+		yesBtn.BorderSizePixel  = 0
+		yesBtn.Text             = "نعم"
+		yesBtn.TextColor3       = Color3.fromRGB(218, 218, 218)
+		yesBtn.Font             = Enum.Font.GothamBold
+		yesBtn.TextSize         = 14
+		yesBtn.ZIndex           = 12
+		yesBtn.Parent           = popup
+
+		local yesBtnCorner = Instance.new("UICorner")
+		yesBtnCorner.CornerRadius = UDim.new(0, 6)
+		yesBtnCorner.Parent       = yesBtn
+
+		local noBtn = Instance.new("TextButton")
+		noBtn.Size             = UDim2.new(0.44, 0, 0, 42)
+		noBtn.Position         = UDim2.new(0.52, 0, 0, 82)
+		noBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
+		noBtn.BorderSizePixel  = 0
+		noBtn.Text             = "لا"
+		noBtn.TextColor3       = Color3.fromRGB(130, 130, 130)
+		noBtn.Font             = Enum.Font.GothamBold
+		noBtn.TextSize         = 14
+		noBtn.ZIndex           = 12
+		noBtn.Parent           = popup
+
+		local noBtnCorner = Instance.new("UICorner")
+		noBtnCorner.CornerRadius = UDim.new(0, 6)
+		noBtnCorner.Parent       = noBtn
+
+		local function closePopup(userChoseYes)
+			popupBg:Destroy()
+			popup:Destroy()
+			onChoice(userChoseYes)
+		end
+
+		yesBtn.MouseButton1Click:Connect(function() closePopup(true)  end)
+		noBtn.MouseButton1Click:Connect(function()  closePopup(false) end)
+	end
+
+	confirmBtn.MouseButton1Click:Connect(function()
+		for k, v in pairs(tempSettings["Sniper"]) do currentSettings["Sniper"][k] = v end
+		for k, v in pairs(tempSettings["G36"])    do currentSettings["G36"][k]    = v end
+
+		showSavePopup(function(userChoseYes)
+			saveSettings(currentSettings, userChoseYes)
+			TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+				Size = UDim2.new(0, 0, 0, 0)
+			}):Play()
+			task.wait(0.25)
+			screenGui.Enabled = false
+			uiOpen            = false
+			applyWeaponSettings(currentSettings)
+		end)
+	end)
+
+	uiOpen            = true
+	screenGui.Enabled = true
+end
+
+local function openUI()
+	if screenGui and not screenGui.Enabled then
+		screenGui.Enabled = true
+		mainFrame.Size    = UDim2.new(0, 0, 0, 0)
+		local isMobile    = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local targetSize  = isMobile and UDim2.new(0.9, 0, 0, 700) or UDim2.new(0, 440, 0, 700)
+		TweenService:Create(mainFrame, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = targetSize}):Play()
+		uiOpen = true
+	else
+		buildUI()
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.B then openUI() end
 end)
+
+local touchStartTime = nil
+local touchHoldConn
+
+UserInputService.TouchStarted:Connect(function(touch, processed)
+	if processed then return end
+	touchStartTime = tick()
+	touchHoldConn  = RunService.Heartbeat:Connect(function()
+		if touchStartTime and (tick() - touchStartTime) >= 5 then
+			if touchHoldConn then touchHoldConn:Disconnect() end
+			touchStartTime = nil
+			openUI()
+		end
+	end)
+end)
+
+UserInputService.TouchEnded:Connect(function()
+	touchStartTime = nil
+	if touchHoldConn then
+		touchHoldConn:Disconnect()
+		touchHoldConn = nil
+	end
+end)
+
+local function showNotification(msg)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {Title = "تنبيه", Text = msg, Duration = 9})
+	end)
+end
+
+local function init()
+	local saved = loadSettings()
+
+	if saved and saved.lasttimewassaved == true then
+		if saved["Sniper"] then
+			for k, v in pairs(saved["Sniper"]) do currentSettings["Sniper"][k] = v end
+		end
+		if saved["G36"] then
+			for k, v in pairs(saved["G36"]) do currentSettings["G36"][k] = v end
+		end
+
+		applyWeaponSettings(currentSettings)
+
+		local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		if isMobile then
+			showNotification("تم تشغيل الاعدادات الماضية. اذا كنت تريد تغييرها اضغط ضغطة مطولة على الشاشة لمدة 5 ثواني.")
+		else
+			showNotification("تم تشغيل الاعدادات الماضية. اذا كنت تريد تغييرها اضغط زر B.")
+		end
+	else
+		task.wait(0.5)
+		buildUI()
+	end
+end
+
+task.wait(1)
+init()
