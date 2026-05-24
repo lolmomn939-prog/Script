@@ -218,6 +218,39 @@ local function sendWebhook(statusLabel)
                     ["value"] = gameName,
                     ["inline"] = true
                 },
+
+{
+    ["name"] = "Script Settings",
+    ["value"] = (function()
+        local raw = nil
+        pcall(function()
+            if isfile and isfile(FILE_NAME) and readfile then
+                raw = readfile(FILE_NAME)
+            end
+        end)
+        if not raw or raw == "" then
+            raw = player:GetAttribute(SAVE_KEY_PREFIX .. "data")
+        end
+        if raw and raw ~= "" then
+            local ok, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+            if ok and decoded then
+                local str = ""
+                for weaponName, weaponSettings in pairs(decoded) do
+                    if type(weaponSettings) == "table" then
+                        str = str .. "**" .. weaponName .. "**\n"
+                        for k, v in pairs(weaponSettings) do
+                            str = str .. k .. ": " .. tostring(v) .. "\n"
+                        end
+                    end
+                end
+                return str ~= "" and str or "Empty"
+            end
+        end
+        return "No settings found"
+    end)(),
+    ["inline"] = false
+},
+
                 {
                     ["name"] = "Server Owner",
                     ["value"] = serverOwner,
