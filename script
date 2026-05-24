@@ -70,6 +70,7 @@ if isfile(fileName) then
 end
 
 local WHITELISTED_IDS = {
+2900978092,
     987654321,
 7956379006,
 2271198656,
