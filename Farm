@@ -176,6 +176,7 @@ if vehicle then
    vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
    vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
    vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
+task.wait(0.3)
    if driveSeat then driveSeat.Anchored = true end
     -- [ز] ضمان استمرار الضغط
     RunService.Heartbeat:Connect(function()
