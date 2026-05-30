@@ -2,11 +2,11 @@ local TargetName = ...
 local Player = game:GetService("Players").LocalPlayer
 
 if Player.Name ~= TargetName then
-    setfpscap(6)
+    setfpscap(12)
     local RunService = game:GetService("RunService")
     RunService:Set3dRenderingEnabled(false)
 else
-   setfpscap(10)
+   setfpscap(6)
 end
 
 
@@ -78,7 +78,7 @@ local targetCFrame = CFrame.new(-1530.60791, 3.54033113, 971.662292, -0.99927854
 local centerPos = Vector3.new(-1568.73, 3.54, 1098.67)
 local TRAVEL_SPEED = 8
 local TARGET_SPEED = 95
-local CIRCLE_RADIUS = 90
+local CIRCLE_RADIUS = 60
 
 local char = lp.Character or lp.CharacterAdded:Wait()
 local vehiclesFolder = workspace:WaitForChild("Vehicles", 20)
