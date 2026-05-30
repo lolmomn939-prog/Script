@@ -162,7 +162,6 @@ if vehicle then
     repeat task.wait() until driveSeat.AssemblyLinearVelocity.Magnitude >= TARGET_SPEED
 
     -- [و] النقل للدائرة
-    if driveSeat then driveSeat.Massless = false end
     
     local randomAngle = math.random() * math.pi * 2
     local finalCirclePosRaw = Vector3.new(
@@ -174,7 +173,9 @@ if vehicle then
     local circleGroundY = GetGroundHeight(finalCirclePosRaw)
     local currentRotation = vehicle:GetPivot().Rotation
     vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
-
+   vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
+   vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
+   vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
     -- [ز] ضمان استمرار الضغط
     RunService.Heartbeat:Connect(function()
         if vehicle then
