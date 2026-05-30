@@ -227,7 +227,9 @@ local function checkAndTeleport()
 
     if not isPrivateServer then
         if queue_on_teleport then
+if Player.Name ~= TargetName then
             queue_on_teleport(teleportScript)
+end
         end
 
         local args = {
