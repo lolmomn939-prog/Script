@@ -1,7 +1,21 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local lp = Players.LocalPlayer
+local cam = workspace.CurrentCamera
 local TargetName = ...
-local Player = game:GetService("Players").LocalPlayer
+-- 1. نظام استثناء المستخدم
+if lp.Name == TargetName then return end
+-- 2. Anti-AFK
+lp.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame)
+    task.wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame)
+end)
 
-if Player.Name ~= TargetName then
+
+if lp.Name ~= TargetName then
     setfpscap(12)
     local RunService = game:GetService("RunService")
     RunService:Set3dRenderingEnabled(false)
@@ -10,101 +24,19 @@ else
 end
 
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-while not Players.LocalPlayer do task.wait() end
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
-local queue_on_teleport = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport)
-
-local teleportScript = [=[
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-while not Players.LocalPlayer do task.wait() end
-local lp = Players.LocalPlayer
-
-if lp:GetAttribute("work") == true then return end
-lp:SetAttribute("work", true)
-print(TargetName)
-if lp.Name == TargetName then return end
-print(TargetName)
-local playerGui = lp:WaitForChild("PlayerGui", 10)
-local isPrivateServer = false
-
-if playerGui then
-    task.wait(2.5) 
-    for _, gui in ipairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.DisplayOrder == 42 then
-            local textLabel = gui:FindFirstChildWhichIsA("TextLabel", true)
-            if textLabel and string.find(string.lower(textLabel.Text), "private server") then
-                isPrivateServer = true
-                break
-            end
-        end
-    end
-end
-
-if not isPrivateServer then
-    local args = {
-        0,
-        "64e2cb18-27a2-472f-9408-a53a26a1dbe3",
-        "b30111uf"
-    }
-    local remoteFolder = ReplicatedStorage:WaitForChild("8QO", 10)
-    if remoteFolder then
-        local teleportEvent = remoteFolder:WaitForChild("7a4d5a27-3523-4f92-939b-9a776fa35948", 10)
-        if teleportEvent then
-            teleportEvent:FireServer(unpack(args))
-        end
-    end
-    return 
-end
-
-local cam = workspace.CurrentCamera
-
-lp.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.new(0,0), cam.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), cam.CFrame)
-end)
-
+-- 3. الإحداثيات والمتغيرات
 local targetCFrame = CFrame.new(-1530.60791, 3.54033113, 971.662292, -0.999278545, 0.000607423717, 0.0379747748, 0.000600866391, 0.999999821, -0.00018408816, -0.0379748829, -0.000161137592, -0.99278665)
 local centerPos = Vector3.new(-1568.73, 3.54, 1098.67)
-local TRAVEL_SPEED = 8
-local TARGET_SPEED = 95
+local TRAVEL_SPEED = 0.6
+local TARGET_SPEED = 65
 local CIRCLE_RADIUS = 60
-
+if lp:GetAttribute("work") == true then return end
+lp:SetAttribute("work", true)
+-- 4. جلب السيارة والشخصية
 local char = lp.Character or lp.CharacterAdded:Wait()
-local vehiclesFolder = workspace:WaitForChild("Vehicles", 20)
-local vehicle = vehiclesFolder and vehiclesFolder:WaitForChild(lp.Name, 20)
+local vehicle = workspace.Vehicles:FindFirstChild(lp.Name)
 
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local Camera = workspace.CurrentCamera
-
--- نستخدم task.spawn عشان نخلي الكود يشتغل في خلفية منفصلة
-task.spawn(function()
-    while true do
-        -- نحدث أبعاد الشاشة في كل دورة عشان لو اللاعب غير حجم النافذة
-        local screenSize = Camera.ViewportSize
-        local targetX = screenSize.X / 2
-        local targetY = (screenSize.Y / 2) + 410
-
-        -- عملية الضغط
-        VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, true, game, 1)
-        task.wait(0.05) -- فترة الضغط للأسفل
-        VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, false, game, 1)
-
-        -- ننتظر ثانية واحدة قبل الضغطة التالية
-        task.wait(3) 
-    end
-end)
-
+-- [أ] نظام الإبادة الشاملة المستمر
 local function superClean()
     for _, item in pairs(workspace:GetChildren()) do
         local isMyVehicle = (item.Name == lp.Name or item == vehicle)
@@ -123,16 +55,20 @@ local function superClean()
 end
 RunService.Heartbeat:Connect(superClean)
 
+-- [ب] دالة الـ Raycast لتحديد ارتفاع الأرض فقط
 local function GetGroundHeight(currentPos)
     local rayOrigin = currentPos + Vector3.new(0, 20, 0) 
     local rayDirection = Vector3.new(0, -40, 0) 
+    
     local raycastParams = RaycastParams.new()
-    if vehicle and char then
-        raycastParams.FilterDescendantsInstances = {vehicle, char}
-    end
+    raycastParams.FilterDescendantsInstances = {vehicle, char} -- استثناء سيارتك وشخصيتك
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    
     local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-    if raycastResult then return raycastResult.Position.Y + 2.4 end
+    
+    if raycastResult then
+        return raycastResult.Position.Y + 2.4 -- الارتفاع المناسب للسيارة فوق السطح
+    end
     return currentPos.Y
 end
 
@@ -140,6 +76,7 @@ if vehicle then
     local driveSeat = vehicle:FindFirstChild("DriveSeat", true)
     local hum = char:WaitForChild("Humanoid")
 
+    -- [ج] نظام الحماية الفورية
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -151,6 +88,7 @@ if vehicle then
         end
     end)
 
+    -- [د] الركوب والتحرك التدريجي
     if driveSeat then driveSeat:Sit(hum) task.wait(5) end
 
     local currentPos = vehicle:GetPivot().Position
@@ -160,6 +98,7 @@ if vehicle then
     local moveConn
     moveConn = RunService.Heartbeat:Connect(function()
         if reachedTarget then moveConn:Disconnect() return end
+        
         for _, part in pairs(vehicle:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.AssemblyLinearVelocity = Vector3.zero
@@ -174,12 +113,17 @@ if vehicle then
         if distance > TRAVEL_SPEED then
             local direction = (flatTarget - flatCurrent).Unit
             currentPos = currentPos + (direction * TRAVEL_SPEED)
+            
             local groundY = GetGroundHeight(currentPos)
             local finalPos = Vector3.new(currentPos.X, groundY, currentPos.Z)
+            
+            -- يوجه السيارة للهدف أثناء الحركة
             vehicle:PivotTo(CFrame.lookAt(finalPos, Vector3.new(targetPos.X, groundY, targetPos.Z)))
             currentPos = finalPos
         else
+            -- [هنا التعديل المهم] عند الوصول، يطبق الروتيشن حق الـ targetCFrame بالملي
             local finalGroundY = GetGroundHeight(targetPos)
+            -- نأخذ الموقع X, Z من الهدف، و Y من الأرض، والروتيشن من الـ CFrame الأصلي
             local finalCFrame = CFrame.new(targetPos.X, finalGroundY , targetPos.Z) * targetCFrame.Rotation
             vehicle:PivotTo(finalCFrame)
             reachedTarget = true
@@ -187,10 +131,13 @@ if vehicle then
     end)
 
     repeat task.wait() until reachedTarget
+    print("✅ وصلنا وطبقنا الروتيشن الأصلي مع محاذاة الأرض.")
 
+    -- [هـ] ضغط W حتى سرعة 60
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
     repeat task.wait() until driveSeat.AssemblyLinearVelocity.Magnitude >= TARGET_SPEED
 
+    -- [و] النقل للدائرة
     if driveSeat then driveSeat.Massless = false end
     
     local randomAngle = math.random() * math.pi * 2
@@ -204,48 +151,12 @@ if vehicle then
     local currentRotation = vehicle:GetPivot().Rotation
     vehicle:PivotTo(CFrame.new(finalCirclePosRaw.X, circleGroundY - 1, finalCirclePosRaw.Z) * currentRotation)
 
+    -- [ز] ضمان استمرار الضغط
     RunService.Heartbeat:Connect(function()
-        if vehicle then VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game) end
+        if vehicle then
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+        end
     end)
+else
+    warn("❌ السيارة غير موجودة!")
 end
-]=]
-
-local function checkAndTeleport()
-    local isPrivateServer = false
-
-    for _, gui in ipairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.DisplayOrder == 42 then
-            local textLabel = gui:FindFirstChildWhichIsA("TextLabel", true)
-            if textLabel then
-                if string.find(string.lower(textLabel.Text), "private server") then
-                    isPrivateServer = true
-                    break
-                end
-            end
-        end
-    end
-
-    if not isPrivateServer then
-        if queue_on_teleport then
-if Player.Name ~= TargetName then
-            queue_on_teleport(teleportScript)
-end
-        end
-
-        local args = {
-            0,
-            "64e2cb18-27a2-472f-9408-a53a26a1dbe3",
-            "b30111uf"
-        }
-        
-        local remoteFolder = ReplicatedStorage:WaitForChild("8QO", 10)
-        if remoteFolder then
-            local teleportEvent = remoteFolder:WaitForChild("7a4d5a27-3523-4f92-939b-9a776fa35948", 10)
-            if teleportEvent then
-                teleportEvent:FireServer(unpack(args))
-            end
-        end
-    end
-end
-
-checkAndTeleport()
