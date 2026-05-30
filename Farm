@@ -76,9 +76,9 @@ end)
 
 local targetCFrame = CFrame.new(-1530.60791, 3.54033113, 971.662292, -0.999278545, 0.000607423717, 0.0379747748, 0.000600866391, 0.999999821, -0.00018408816, -0.0379748829, -0.000161137592, -0.99278665)
 local centerPos = Vector3.new(-1568.73, 3.54, 1098.67)
-local TRAVEL_SPEED = 7
-local TARGET_SPEED = 60 
-local CIRCLE_RADIUS = 60
+local TRAVEL_SPEED = 8
+local TARGET_SPEED = 140
+local CIRCLE_RADIUS = 90
 
 local char = lp.Character or lp.CharacterAdded:Wait()
 local vehiclesFolder = workspace:WaitForChild("Vehicles", 20)
