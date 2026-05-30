@@ -1,4 +1,4 @@
-local TargetName = _G.UserName
+local TargetName = ...
 local Player = game:GetService("Players").LocalPlayer
 
 if Player.Name ~= TargetName then
