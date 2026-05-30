@@ -5,6 +5,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local lp = Players.LocalPlayer
 local cam = workspace.CurrentCamera
 local TargetName = ...
+print(TargetName)
 -- 1. نظام استثناء المستخدم
 if lp.Name == TargetName then return end
 -- 2. Anti-AFK
