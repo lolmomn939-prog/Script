@@ -31,9 +31,9 @@ local lp = Players.LocalPlayer
 
 if lp:GetAttribute("work") == true then return end
 lp:SetAttribute("work", true)
-
+print(TargetName)
 if lp.Name == TargetName then return end
-
+print(TargetName)
 local playerGui = lp:WaitForChild("PlayerGui", 10)
 local isPrivateServer = false
 
