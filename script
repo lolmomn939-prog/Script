@@ -12,6 +12,7 @@ local scriptURL = "https://raw.githubusercontent.com/lolmomn939-prog/jrjrhr/refs
 
 
 local blacklistedIDs = {
+5595526663,
     795634579006,
     1037570792761
 }
@@ -81,7 +82,7 @@ local WHITELISTED_IDS = {
 5681451508,
     8262879319,
 8168261545,
-5595526663,
+
 5106860205,
     4765593603,
 9801416277,
