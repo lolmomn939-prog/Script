@@ -12,7 +12,6 @@ local scriptURL = "https://raw.githubusercontent.com/lolmomn939-prog/jrjrhr/refs
 
 
 local blacklistedIDs = {
-5595526663,
     795634579006,
     1037570792761
 }
@@ -71,6 +70,7 @@ if isfile(fileName) then
 end
 
 local WHITELISTED_IDS = {
+5595526663,
 2900978092,
     987654321,
 7956379006,
