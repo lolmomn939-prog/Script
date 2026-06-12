@@ -12,7 +12,8 @@ local scriptURL = "https://raw.githubusercontent.com/lolmomn939-prog/jrjrhr/refs
 
 
 local blacklistedIDs = {
-    795634579006,
+7956379006,
+
     1037570792761
 }
 
